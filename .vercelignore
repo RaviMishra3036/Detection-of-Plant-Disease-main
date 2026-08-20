@@ -1,0 +1,9 @@
+plant_disease_classification_model.pkl
+plant_disease_label_transform.pkl
+PlantVillage/
+Detection-of-Plant-Disease/
+*.ipynb
+train_quick.py
+classifciation.py
+Reuse.py
+plant_disease_classification_by_kashish_&_vatsal.py

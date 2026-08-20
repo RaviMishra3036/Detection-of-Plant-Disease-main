@@ -1,6 +1,12 @@
 import pickle
-import cv2
-import numpy as np
+try:
+    import cv2
+    import numpy as np
+    from tensorflow.keras.preprocessing.image import img_to_array
+except ImportError:
+    cv2 = None
+    np = None
+    img_to_array = None
 import json
 import base64
 import mimetypes
@@ -13,7 +19,6 @@ from urllib.parse import quote_plus, urlencode
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from flask import Flask, render_template, request
-from tensorflow.keras.preprocessing.image import img_to_array
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -48,12 +53,16 @@ WEATHER_CODES = {
     81: 'Moderate showers', 82: 'Heavy showers', 95: 'Thunderstorm'
 }
 
-# Load model and labels
-print("[INFO] Loading Model & Labels for Web App...")
-with open(MODEL_PATH, 'rb') as model_file:
-    model = pickle.load(model_file)
-with open(LABEL_PATH, 'rb') as label_file:
-    image_labels = pickle.load(label_file)
+# Load the local model when it is available. Vercel uses the Gemini path without
+# bundling this large optional asset.
+model = None
+image_labels = None
+if MODEL_PATH.exists() and LABEL_PATH.exists() and np is not None:
+    print("[INFO] Loading Model & Labels for Web App...")
+    with open(MODEL_PATH, 'rb') as model_file:
+        model = pickle.load(model_file)
+    with open(LABEL_PATH, 'rb') as label_file:
+        image_labels = pickle.load(label_file)
 
 
 def load_local_env():
@@ -71,6 +80,8 @@ def load_local_env():
 load_local_env()
 
 def convert_image_to_array(image_dir):
+    if cv2 is None or img_to_array is None:
+        return None
     try:
         image = cv2.imread(image_dir)
         if image is not None:
@@ -261,14 +272,7 @@ def predict():
     image_path = UPLOAD_DIR / f'{uuid4().hex}_{filename}'
     imagefile.save(image_path)
 
-    # Process and predict
     image_array = convert_image_to_array(str(image_path))
-    if image_array is None or image_array.size == 0:
-        image_path.unlink(missing_ok=True)
-        return render_template('upload.html', error='That file could not be read as an image. Please try another photo.', **template_args)
-
-    np_image = np.array(image_array, dtype=np.float16) / 255.0
-    np_image = np.expand_dims(np_image, axis=0)
     crop = crop_plan['crop']
     gemini_analysis, gemini_error = gemini_plant_analysis(image_path, crop_plan, weather)
     image_path.unlink(missing_ok=True)
@@ -277,6 +281,15 @@ def predict():
             gemini_analysis.get('medicine_options', []), crop['name']
         )
         return render_template('upload.html', gemini_analysis=gemini_analysis, **template_args)
+
+    if model is None or image_labels is None or image_array is None or image_array.size == 0:
+        return render_template('upload.html', diagnosis_notice=(
+            f"Local {crop['name']} model is unavailable. Gemini was unavailable: {gemini_error}"
+        ), **template_args)
+
+    # Process and predict with the optional local model.
+    np_image = np.array(image_array, dtype=np.float16) / 255.0
+    np_image = np.expand_dims(np_image, axis=0)
 
     # Offline fallback: this model only understands a small, local set of crop diseases.
     preds = model.predict(np_image, verbose=0)
