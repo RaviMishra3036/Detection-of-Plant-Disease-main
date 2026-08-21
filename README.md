@@ -44,9 +44,10 @@ flowchart TD
 
 ### Analysis modes
 
-1. **Gemini Vision mode:** If `GEMINI_API_KEY` is configured in the hosting environment, the image is sent to Gemini for cautious visual screening and a structured report.
-2. **Local model mode:** When Gemini is unavailable and the model files are present, the TensorFlow model provides an offline crop-specific prediction.
-3. **Safe fallback mode:** On Vercel, the large local model is excluded from the serverless bundle. If Gemini is unavailable there, the app displays a clear no-false-diagnosis message instead of pretending to identify a disease.
+1. **Provider fallback mode:** Gemini is tried first, followed by Grok, OpenRouter, Hugging Face, and NVIDIA when their environment keys are configured.
+2. **Ollama offline mode:** When cloud providers are unavailable, the app uses the local `gemma3:4b` vision model through Ollama.
+3. **Local classifier mode:** If AI vision providers are unavailable and the model files are present, the TensorFlow model provides an offline crop-specific prediction.
+4. **Safe Vercel behavior:** On Vercel, the large local models are excluded from the serverless bundle. Configure a reachable hosted Ollama endpoint if offline-style vision fallback is needed in production.
 
 ## Architecture
 
@@ -58,7 +59,7 @@ Flask application (app.py)
   |-- templates/upload.html       UI, upload, camera, speech
   |-- crop planner                crop, soil, harvest calculations
   |-- weather client               Open-Meteo HTTP requests
-  |-- Gemini client                optional environment-key API call
+  |-- AI provider clients          Gemini, Grok, OpenRouter, HF, NVIDIA, Ollama
   |-- local predictor              optional TensorFlow + pickle model
   |
   +-- Local: uploads/ or configured UPLOAD_DIR

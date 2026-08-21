@@ -250,7 +250,7 @@ def ollama_plant_analysis(image_data, mime_type, prompt):
                'format': 'json', 'images': [image_data], 'prompt': prompt}
     request = Request(os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434/api/generate'),
                       data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'}, method='POST')
-    with urlopen(request, timeout=60) as response:
+    with urlopen(request, timeout=300) as response:
         data = json.loads(response.read().decode('utf-8'))
     return parse_analysis(data['response'])
 
