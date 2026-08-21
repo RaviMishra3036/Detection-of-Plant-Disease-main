@@ -251,6 +251,8 @@ git lfs track "*.pkl"
 - **Ayush Kaushik**: project guidance and technical contributions
 - GitHub: [Minato95-ayu](https://github.com/Minato95-ayu)
 
+Full project attribution is recorded in [AUTHORS.md](AUTHORS.md) and should be retained in future clones, edits, and distributions.
+
 ## License
 
 This project is released under the [MIT License](LICENSE).
