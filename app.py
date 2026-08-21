@@ -277,7 +277,8 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
             print('[AI] gemini succeeded')
             return parse_analysis(data['candidates'][0]['content']['parts'][0]['text']), 'Gemini'
         except Exception as error:
-            print(f'[AI] gemini failed: {type(error).__name__}')
+                status = getattr(error, 'code', None)
+                print(f'[AI] gemini failed: {type(error).__name__}{f" HTTP {status}" if status else ""}')
             failures.append(f'Gemini: {str(error)[:100]}')
     else:
         failures.append('Gemini: GEMINI_API_KEY is not configured')
@@ -288,7 +289,8 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
             print(f'[AI] {provider} succeeded')
             return analysis, provider.title()
         except Exception as error:
-            print(f'[AI] {provider} failed: {type(error).__name__}')
+            status = getattr(error, 'code', None)
+            print(f'[AI] {provider} failed: {type(error).__name__}{f" HTTP {status}" if status else ""}')
             failures.append(f'{provider.title()}: {str(error)[:100]}')
     ollama_url = os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434/api/generate')
     if os.getenv('VERCEL') and ollama_url.startswith(('http://127.0.0.1', 'http://localhost')):
