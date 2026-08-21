@@ -246,6 +246,10 @@ git lfs track "*.pkl"
 - GitHub: [RaviMishra3036](https://github.com/RaviMishra3036)
 - Project: [Detection-of-Plant-Disease-main](https://github.com/RaviMishra3036/Detection-of-Plant-Disease-main)
 
+## Contributors
+
+- **Ayush Kaushik**: [Minato95-ayu](https://github.com/Minato95-ayu)
+
 ## License
 
 This project is released under the [MIT License](LICENSE).
