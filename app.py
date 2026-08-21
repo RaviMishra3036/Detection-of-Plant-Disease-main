@@ -31,7 +31,7 @@ LABEL_PATH = BASE_DIR / 'plant_disease_label_transform.pkl'
 UPLOAD_DIR = Path(os.getenv('UPLOAD_DIR', '/tmp' if os.getenv('VERCEL') else str(BASE_DIR / 'uploads')))
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp'}
 MIN_CONFIDENCE = 0.45
-GEMINI_MODEL = 'gemini-3.6-flash'
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-3.6-flash')
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 CROP_PROFILES = {
@@ -182,14 +182,7 @@ def build_price_links(medicine_options, crop_name):
     return links
 
 
-def gemini_plant_analysis(image_path, crop_plan, weather):
-    """Ask Gemini Vision for a structured, cautious observation of a plant image."""
-    api_key = os.getenv('GEMINI_API_KEY')
-    if not api_key:
-        return None, 'Gemini is not configured. Add GEMINI_API_KEY to .env.'
-
-    mime_type = mimetypes.guess_type(str(image_path))[0] or 'image/jpeg'
-    image_data = base64.b64encode(Path(image_path).read_bytes()).decode('ascii')
+def build_analysis_prompt(crop_plan, weather):
     crop_name = crop_plan['crop']['name']
     weather_context = 'No live weather was requested.'
     if weather:
@@ -198,7 +191,7 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
             f"humidity {weather['humidity']}%, soil estimate {weather['soil_temperature']} C, "
             f"soil moisture estimate {weather['soil_moisture']} m3/m3."
         )
-    prompt = f'''You are a cautious agricultural image-screening assistant. Analyse this image for a farmer.
+    return f'''You are a cautious agricultural image-screening assistant. Analyse this image for a farmer.
 Selected crop: {crop_name}. Weather context: {weather_context}
 Return ONLY valid JSON, with exactly these keys:
 plant_or_object, crop_match, health_status, confidence, observations, possible_conditions, immediate_actions, care_guidance, water_guidance, nutrition_guidance, temperature_guidance, harvest_guidance, medicine_options, hindi_summary, english_summary, safety_note.
@@ -213,40 +206,88 @@ Rules:
 - hindi_summary is a simple Hindi farmer-facing summary in Devanagari. english_summary is the same advice in simple English.
 - harvest_guidance must say whether the image can or cannot determine harvest readiness.
 - safety_note must advise local agronomy confirmation for possible disease or treatment decisions.'''
-    payload = {
-        'contents': [{'parts': [
+
+
+def parse_analysis(text):
+    text = re.sub(r'^```(?:json)?\s*|\s*```$', '', text.strip())
+    analysis = json.loads(text)
+    required = {'plant_or_object', 'crop_match', 'health_status', 'confidence', 'observations',
+                'possible_conditions', 'immediate_actions', 'care_guidance', 'water_guidance',
+                'nutrition_guidance', 'temperature_guidance', 'harvest_guidance', 'medicine_options',
+                'hindi_summary', 'english_summary', 'safety_note'}
+    if not required.issubset(analysis):
+        raise ValueError('Incomplete structured response')
+    return analysis
+
+
+def openai_compatible_analysis(provider, image_data, mime_type, prompt):
+    """Call a vision model using the OpenAI-compatible API used by several providers."""
+    settings = {
+        'grok': ('XAI_API_KEY', 'XAI_BASE_URL', 'XAI_MODEL', 'https://api.x.ai/v1/chat/completions', 'grok-2-vision-1212'),
+        'openrouter': ('OPENROUTER_API_KEY', 'OPENROUTER_BASE_URL', 'OPENROUTER_MODEL', 'https://openrouter.ai/api/v1/chat/completions', 'google/gemini-2.0-flash-001'),
+        'huggingface': ('HF_TOKEN', 'HF_BASE_URL', 'HF_MODEL', 'https://router.huggingface.co/v1/chat/completions', 'Qwen/Qwen2.5-VL-7B-Instruct'),
+        'nvidia': ('NVIDIA_API_KEY', 'NVIDIA_BASE_URL', 'NVIDIA_MODEL', 'https://integrate.api.nvidia.com/v1/chat/completions', 'meta/llama-3.2-11b-vision-instruct'),
+    }
+    key_name, url_name, model_name, default_url, default_model = settings[provider]
+    api_key = os.getenv(key_name)
+    if not api_key:
+        raise ValueError(f'{key_name} is not configured')
+    payload = {'model': os.getenv(model_name, default_model), 'temperature': 0.2,
+               'response_format': {'type': 'json_object'}, 'messages': [{'role': 'user', 'content': [
+                   {'type': 'text', 'text': prompt},
+                   {'type': 'image_url', 'image_url': {'url': f'data:{mime_type};base64,{image_data}'}}
+               ]}]}
+    request = Request(os.getenv(url_name, default_url), data=json.dumps(payload).encode('utf-8'),
+                      headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'}, method='POST')
+    with urlopen(request, timeout=35) as response:
+        data = json.loads(response.read().decode('utf-8'))
+    return parse_analysis(data['choices'][0]['message']['content'])
+
+
+def ollama_plant_analysis(image_data, mime_type, prompt):
+    """Use a local Ollama vision model when every remote provider is unavailable."""
+    payload = {'model': os.getenv('OLLAMA_MODEL', 'llama3.2-vision'), 'stream': False,
+               'format': 'json', 'images': [image_data], 'prompt': prompt}
+    request = Request(os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434/api/generate'),
+                      data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'}, method='POST')
+    with urlopen(request, timeout=60) as response:
+        data = json.loads(response.read().decode('utf-8'))
+    return parse_analysis(data['response'])
+
+
+def gemini_plant_analysis(image_path, crop_plan, weather):
+    """Try configured vision providers in order, ending with local Ollama."""
+    mime_type = mimetypes.guess_type(str(image_path))[0] or 'image/jpeg'
+    image_data = base64.b64encode(Path(image_path).read_bytes()).decode('ascii')
+    prompt = build_analysis_prompt(crop_plan, weather)
+    failures = []
+    api_key = os.getenv('GEMINI_API_KEY')
+    if api_key:
+        payload = {'contents': [{'parts': [
             {'inline_data': {'mime_type': mime_type, 'data': image_data}},
             {'text': prompt}
-        ]}],
-        'generationConfig': {'temperature': 0.2, 'responseMimeType': 'application/json'}
-    }
-    request = Request(
-        f'https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent',
-        data=json.dumps(payload).encode('utf-8'),
-        headers={'Content-Type': 'application/json', 'x-goog-api-key': api_key},
-        method='POST'
-    )
-    try:
-        with urlopen(request, timeout=35) as response:
-            data = json.loads(response.read().decode('utf-8'))
-        text = data['candidates'][0]['content']['parts'][0]['text']
-        text = re.sub(r'^```(?:json)?\s*|\s*```$', '', text.strip())
-        analysis = json.loads(text)
-        required = {'plant_or_object', 'crop_match', 'health_status', 'confidence', 'observations',
-                    'possible_conditions', 'immediate_actions', 'care_guidance', 'water_guidance',
-                    'nutrition_guidance', 'temperature_guidance', 'harvest_guidance', 'medicine_options',
-                    'hindi_summary', 'english_summary', 'safety_note'}
-        if not required.issubset(analysis):
-            raise ValueError('Incomplete structured response')
-        return analysis, None
-    except HTTPError as error:
+        ]}], 'generationConfig': {'temperature': 0.2, 'responseMimeType': 'application/json'}}
+        request = Request(f'https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent',
+                          data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json', 'x-goog-api-key': api_key}, method='POST')
         try:
-            message = json.loads(error.read().decode('utf-8')).get('error', {}).get('message', '')
-        except Exception:
-            message = ''
-        return None, f'Gemini request failed (HTTP {error.code}): {message[:180] or "check API key, quota, and model access"}'
-    except Exception:
-        return None, 'Gemini could not complete image analysis right now. Check the API key, quota, and internet connection, then try again.'
+            with urlopen(request, timeout=35) as response:
+                data = json.loads(response.read().decode('utf-8'))
+            return parse_analysis(data['candidates'][0]['content']['parts'][0]['text']), 'Gemini'
+        except Exception as error:
+            failures.append(f'Gemini: {str(error)[:100]}')
+    else:
+        failures.append('Gemini: GEMINI_API_KEY is not configured')
+
+    for provider in ('grok', 'openrouter', 'huggingface', 'nvidia'):
+        try:
+            return openai_compatible_analysis(provider, image_data, mime_type, prompt), provider.title()
+        except Exception as error:
+            failures.append(f'{provider.title()}: {str(error)[:100]}')
+    try:
+        return ollama_plant_analysis(image_data, mime_type, prompt), 'Ollama (offline)'
+    except Exception as error:
+        failures.append(f'Ollama: {str(error)[:100]}')
+        return None, 'All AI providers failed. ' + ' | '.join(failures)
 
 @app.route('/', methods=['GET'])
 def home():
@@ -277,6 +318,7 @@ def predict():
     gemini_analysis, gemini_error = gemini_plant_analysis(image_path, crop_plan, weather)
     image_path.unlink(missing_ok=True)
     if gemini_analysis:
+        gemini_analysis['provider'] = gemini_error
         gemini_analysis['shopping_links'] = build_price_links(
             gemini_analysis.get('medicine_options', []), crop['name']
         )
