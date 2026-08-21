@@ -277,8 +277,8 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
             print('[AI] gemini succeeded')
             return parse_analysis(data['candidates'][0]['content']['parts'][0]['text']), 'Gemini'
         except Exception as error:
-                status = getattr(error, 'code', None)
-                print(f'[AI] gemini failed: {type(error).__name__}{f" HTTP {status}" if status else ""}')
+            status = getattr(error, 'code', None)
+            print(f'[AI] gemini failed: {type(error).__name__}{f" HTTP {status}" if status else ""}')
             failures.append(f'Gemini: {str(error)[:100]}')
     else:
         failures.append('Gemini: GEMINI_API_KEY is not configured')
