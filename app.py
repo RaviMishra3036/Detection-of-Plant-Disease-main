@@ -225,7 +225,7 @@ def openai_compatible_analysis(provider, image_data, mime_type, prompt):
     settings = {
         'grok': ('XAI_API_KEY', 'XAI_BASE_URL', 'XAI_MODEL', 'https://api.x.ai/v1/chat/completions', 'grok-2-vision-1212'),
         'openrouter': ('OPENROUTER_API_KEY', 'OPENROUTER_BASE_URL', 'OPENROUTER_MODEL', 'https://openrouter.ai/api/v1/chat/completions', 'google/gemini-2.5-flash'),
-        'huggingface': ('HF_TOKEN', 'HF_BASE_URL', 'HF_MODEL', 'https://router.huggingface.co/v1/chat/completions', 'Qwen/Qwen2.5-VL-7B-Instruct'),
+        'huggingface': ('HF_TOKEN', 'HF_BASE_URL', 'HF_MODEL', 'https://router.huggingface.co/v1/chat/completions', 'google/gemma-3-4b-it'),
         'nvidia': ('NVIDIA_API_KEY', 'NVIDIA_BASE_URL', 'NVIDIA_MODEL', 'https://integrate.api.nvidia.com/v1/chat/completions', 'meta/llama-3.2-11b-vision-instruct'),
     }
     key_name, url_name, model_name, default_url, default_model = settings[provider]
