@@ -274,24 +274,32 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
         try:
             with urlopen(request, timeout=int(os.getenv('AI_PROVIDER_TIMEOUT', '15'))) as response:
                 data = json.loads(response.read().decode('utf-8'))
+            print('[AI] gemini succeeded')
             return parse_analysis(data['candidates'][0]['content']['parts'][0]['text']), 'Gemini'
         except Exception as error:
+            print(f'[AI] gemini failed: {type(error).__name__}')
             failures.append(f'Gemini: {str(error)[:100]}')
     else:
         failures.append('Gemini: GEMINI_API_KEY is not configured')
 
     for provider in ('openrouter', 'huggingface', 'grok', 'nvidia'):
         try:
-            return openai_compatible_analysis(provider, image_data, mime_type, prompt), provider.title()
+            analysis = openai_compatible_analysis(provider, image_data, mime_type, prompt)
+            print(f'[AI] {provider} succeeded')
+            return analysis, provider.title()
         except Exception as error:
+            print(f'[AI] {provider} failed: {type(error).__name__}')
             failures.append(f'{provider.title()}: {str(error)[:100]}')
     ollama_url = os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434/api/generate')
     if os.getenv('VERCEL') and ollama_url.startswith(('http://127.0.0.1', 'http://localhost')):
         failures.append('Ollama is not reachable from this deployment')
     else:
         try:
-            return ollama_plant_analysis(image_data, mime_type, prompt), 'Ollama (offline)'
+            analysis = ollama_plant_analysis(image_data, mime_type, prompt)
+            print('[AI] ollama succeeded')
+            return analysis, 'Ollama (offline)'
         except Exception:
+            print('[AI] ollama unavailable')
             failures.append('Ollama request failed')
     return None, 'All configured AI providers are unavailable. Check provider quota, model access, and Ollama deployment settings.'
 
