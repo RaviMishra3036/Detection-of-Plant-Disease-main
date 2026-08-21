@@ -263,6 +263,16 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
     image_data = base64.b64encode(Path(image_path).read_bytes()).decode('ascii')
     prompt = build_analysis_prompt(crop_plan, weather)
     failures = []
+    ollama_url = os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434/api/generate')
+    local_ollama = not os.getenv('VERCEL') and ollama_url.startswith(('http://127.0.0.1', 'http://localhost'))
+    if local_ollama:
+        try:
+            analysis = ollama_plant_analysis(image_data, mime_type, prompt)
+            print('[AI] ollama succeeded')
+            return analysis, 'Ollama (offline)'
+        except Exception:
+            print('[AI] ollama unavailable')
+            failures.append('Ollama request failed')
     api_key = os.getenv('GEMINI_API_KEY')
     if api_key:
         payload = {'contents': [{'parts': [
@@ -292,7 +302,6 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
             status = getattr(error, 'code', None)
             print(f'[AI] {provider} failed: {type(error).__name__}{f" HTTP {status}" if status else ""}')
             failures.append(f'{provider.title()}: {str(error)[:100]}')
-    ollama_url = os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434/api/generate')
     if os.getenv('VERCEL') and ollama_url.startswith(('http://127.0.0.1', 'http://localhost')):
         failures.append('Ollama is not reachable from this deployment')
     else:
