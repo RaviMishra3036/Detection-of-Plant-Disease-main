@@ -224,19 +224,21 @@ def openai_compatible_analysis(provider, image_data, mime_type, prompt):
     """Call a vision model using the OpenAI-compatible API used by several providers."""
     settings = {
         'grok': ('XAI_API_KEY', 'XAI_BASE_URL', 'XAI_MODEL', 'https://api.x.ai/v1/chat/completions', 'grok-2-vision-1212'),
-        'openrouter': ('OPENROUTER_API_KEY', 'OPENROUTER_BASE_URL', 'OPENROUTER_MODEL', 'https://openrouter.ai/api/v1/chat/completions', 'google/gemini-2.0-flash-001'),
+        'openrouter': ('OPENROUTER_API_KEY', 'OPENROUTER_BASE_URL', 'OPENROUTER_MODEL', 'https://openrouter.ai/api/v1/chat/completions', 'google/gemini-2.5-flash'),
         'huggingface': ('HF_TOKEN', 'HF_BASE_URL', 'HF_MODEL', 'https://router.huggingface.co/v1/chat/completions', 'Qwen/Qwen2.5-VL-7B-Instruct'),
         'nvidia': ('NVIDIA_API_KEY', 'NVIDIA_BASE_URL', 'NVIDIA_MODEL', 'https://integrate.api.nvidia.com/v1/chat/completions', 'meta/llama-3.2-11b-vision-instruct'),
     }
     key_name, url_name, model_name, default_url, default_model = settings[provider]
-    api_key = os.getenv(key_name)
+    api_key = ''.join(os.getenv(key_name, '').split())
     if not api_key:
         raise ValueError(f'{key_name} is not configured')
     payload = {'model': os.getenv(model_name, default_model), 'temperature': 0.2,
-               'response_format': {'type': 'json_object'}, 'messages': [{'role': 'user', 'content': [
+               'messages': [{'role': 'user', 'content': [
                    {'type': 'text', 'text': prompt},
                    {'type': 'image_url', 'image_url': {'url': f'data:{mime_type};base64,{image_data}'}}
                ]}]}
+    if provider == 'openrouter':
+        payload['response_format'] = {'type': 'json_object'}
     request = Request(os.getenv(url_name, default_url), data=json.dumps(payload).encode('utf-8'),
                       headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'}, method='POST')
     with urlopen(request, timeout=35) as response:
@@ -283,11 +285,15 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
             return openai_compatible_analysis(provider, image_data, mime_type, prompt), provider.title()
         except Exception as error:
             failures.append(f'{provider.title()}: {str(error)[:100]}')
-    try:
-        return ollama_plant_analysis(image_data, mime_type, prompt), 'Ollama (offline)'
-    except Exception as error:
-        failures.append(f'Ollama: {str(error)[:100]}')
-        return None, 'All AI providers failed. ' + ' | '.join(failures)
+    ollama_url = os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434/api/generate')
+    if os.getenv('VERCEL') or ollama_url.startswith(('http://127.0.0.1', 'http://localhost')):
+        failures.append('Ollama is not reachable from this deployment')
+    else:
+        try:
+            return ollama_plant_analysis(image_data, mime_type, prompt), 'Ollama (offline)'
+        except Exception:
+            failures.append('Ollama request failed')
+    return None, 'All configured AI providers are unavailable. Check provider quota, model access, and Ollama deployment settings.'
 
 @app.route('/', methods=['GET'])
 def home():
