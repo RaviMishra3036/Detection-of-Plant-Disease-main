@@ -211,6 +211,35 @@ Rules:
 def parse_analysis(text):
     text = re.sub(r'^```(?:json)?\s*|\s*```$', '', text.strip())
     analysis = json.loads(text)
+    if 'plant_or_object' not in analysis and 'diagnosis' in analysis:
+        diagnosis = str(analysis.get('diagnosis') or 'uncertain')
+        causes = analysis.get('causes', [])
+        treatment = analysis.get('treatment', [])
+        prevention = analysis.get('prevention', [])
+        if isinstance(causes, str):
+            causes = [causes]
+        if isinstance(treatment, str):
+            treatment = [treatment]
+        if isinstance(prevention, str):
+            prevention = [prevention]
+        analysis = {
+            'plant_or_object': 'leaf',
+            'crop_match': 'uncertain',
+            'health_status': 'possible issue' if diagnosis.lower() not in {'healthy', 'healthy-looking', 'no disease'} else 'healthy-looking',
+            'confidence': analysis.get('confidence', 0),
+            'observations': [diagnosis],
+            'possible_conditions': [{'name': cause, 'likelihood': 'medium', 'reason': 'Suggested by the image-screening response.'} for cause in causes[:3]],
+            'immediate_actions': treatment[:5],
+            'care_guidance': prevention[:5],
+            'water_guidance': 'Use normal crop-appropriate watering; image data alone is insufficient for irrigation decisions.',
+            'nutrition_guidance': 'Do not change fertilizer based on this image alone; confirm the cause first.',
+            'temperature_guidance': 'Confirm local temperature and weather conditions before treatment decisions.',
+            'harvest_guidance': 'This image cannot determine harvest readiness.',
+            'medicine_options': [],
+            'hindi_summary': f'पत्ते में {diagnosis} जैसा संकेत दिख सकता है। स्थानीय कृषि विशेषज्ञ से पुष्टि करें।',
+            'english_summary': f'The leaf may show signs of {diagnosis}. Confirm with a local agriculture expert.',
+            'safety_note': 'This is visual screening, not a laboratory diagnosis. Confirm disease and treatment locally.'
+        }
     required = {'plant_or_object', 'crop_match', 'health_status', 'confidence', 'observations',
                 'possible_conditions', 'immediate_actions', 'care_guidance', 'water_guidance',
                 'nutrition_guidance', 'temperature_guidance', 'harvest_guidance', 'medicine_options',
@@ -224,7 +253,7 @@ def openai_compatible_analysis(provider, image_data, mime_type, prompt):
     """Call a vision model using the OpenAI-compatible API used by several providers."""
     settings = {
         'grok': ('XAI_API_KEY', 'XAI_BASE_URL', 'XAI_MODEL', 'https://api.x.ai/v1/chat/completions', 'grok-2-vision-1212'),
-        'openrouter': ('OPENROUTER_API_KEY', 'OPENROUTER_BASE_URL', 'OPENROUTER_MODEL', 'https://openrouter.ai/api/v1/chat/completions', 'google/gemini-2.5-flash'),
+        'openrouter': ('OPENROUTER_API_KEY', 'OPENROUTER_BASE_URL', 'OPENROUTER_MODEL', 'https://openrouter.ai/api/v1/chat/completions', 'nvidia/nemotron-nano-12b-v2-vl:free'),
         'huggingface': ('HF_TOKEN', 'HF_BASE_URL', 'HF_MODEL', 'https://router.huggingface.co/v1/chat/completions', 'google/gemma-3-4b-it'),
         'nvidia': ('NVIDIA_API_KEY', 'NVIDIA_BASE_URL', 'NVIDIA_MODEL', 'https://integrate.api.nvidia.com/v1/chat/completions', 'meta/llama-3.2-11b-vision-instruct'),
     }
