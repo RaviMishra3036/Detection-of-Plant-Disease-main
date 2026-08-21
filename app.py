@@ -241,7 +241,7 @@ def openai_compatible_analysis(provider, image_data, mime_type, prompt):
         payload['response_format'] = {'type': 'json_object'}
     request = Request(os.getenv(url_name, default_url), data=json.dumps(payload).encode('utf-8'),
                       headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'}, method='POST')
-    with urlopen(request, timeout=35) as response:
+    with urlopen(request, timeout=int(os.getenv('AI_PROVIDER_TIMEOUT', '15'))) as response:
         data = json.loads(response.read().decode('utf-8'))
     return parse_analysis(data['choices'][0]['message']['content'])
 
@@ -272,7 +272,7 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
         request = Request(f'https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent',
                           data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json', 'x-goog-api-key': api_key}, method='POST')
         try:
-            with urlopen(request, timeout=35) as response:
+            with urlopen(request, timeout=int(os.getenv('AI_PROVIDER_TIMEOUT', '15'))) as response:
                 data = json.loads(response.read().decode('utf-8'))
             return parse_analysis(data['candidates'][0]['content']['parts'][0]['text']), 'Gemini'
         except Exception as error:
@@ -280,7 +280,7 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
     else:
         failures.append('Gemini: GEMINI_API_KEY is not configured')
 
-    for provider in ('grok', 'openrouter', 'huggingface', 'nvidia'):
+    for provider in ('openrouter', 'huggingface', 'grok', 'nvidia'):
         try:
             return openai_compatible_analysis(provider, image_data, mime_type, prompt), provider.title()
         except Exception as error:
