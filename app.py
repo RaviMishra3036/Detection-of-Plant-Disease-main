@@ -332,7 +332,8 @@ def predict():
 
     if model is None or image_labels is None or image_array is None or image_array.size == 0:
         return render_template('upload.html', diagnosis_notice=(
-            f"Local {crop['name']} model is unavailable. Gemini was unavailable: {gemini_error}"
+            f"Online analysis and the local {crop['name']} model are currently unavailable. "
+            "Please try again later or verify the deployment's AI environment settings."
         ), **template_args)
 
     # Process and predict with the optional local model.
@@ -348,7 +349,7 @@ def predict():
     if not trained_labels:
         return render_template('upload.html', diagnosis_notice=(
             f"Image disease detection is not trained for {crop['name']} yet. "
-            f"Gemini was unavailable: {gemini_error}"
+            "Please choose a supported crop or try again later."
         ), **template_args)
 
     result, predicted_label = max(trained_labels, key=lambda item: confidence_scores[item[0]])
@@ -356,7 +357,7 @@ def predict():
     if confidence_scores[result] < MIN_CONFIDENCE:
         return render_template('upload.html', diagnosis_notice=(
             f"No reliable {crop['name']} disease match was found ({confidence}% confidence). "
-            f"Gemini was unavailable: {gemini_error}"
+            "Please use a clearer image or confirm the result with a local agriculture expert."
         ), confidence=confidence, **template_args)
 
     return render_template('upload.html', prediction=format_label(predicted_label), confidence=confidence, **template_args)
