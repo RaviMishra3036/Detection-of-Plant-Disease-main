@@ -1,6 +1,6 @@
 # LeafLens: Plant Disease Detection
 
-LeafLens is a plant-health screening web application developed and maintained by **Ravi Mishra**. It allows a user to upload a leaf photograph, select the crop, and receive a cautious plant-health result through a Flask web interface.
+LeafLens is a plant-health screening web application maintained by **Ravi Mishra**, with project guidance and technical contributions from **Ayush Kaushik**. It allows a user to upload a leaf photograph, select the crop, and receive a cautious plant-health result through a Flask web interface.
 
 The project combines a local crop-disease classification model with an optional Gemini Vision analysis workflow. It also includes crop planning, soil notes, weather lookup, camera capture, Hindi/English voice summaries, and treatment-safety guidance.
 
@@ -248,7 +248,8 @@ git lfs track "*.pkl"
 
 ## Contributors
 
-- **Ayush Kaushik**: [Minato95-ayu](https://github.com/Minato95-ayu)
+- **Ayush Kaushik**: project guidance and technical contributions
+- GitHub: [Minato95-ayu](https://github.com/Minato95-ayu)
 
 ## License
 
