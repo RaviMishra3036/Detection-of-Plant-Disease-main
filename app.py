@@ -286,7 +286,7 @@ def gemini_plant_analysis(image_path, crop_plan, weather):
         except Exception as error:
             failures.append(f'{provider.title()}: {str(error)[:100]}')
     ollama_url = os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434/api/generate')
-    if os.getenv('VERCEL') or ollama_url.startswith(('http://127.0.0.1', 'http://localhost')):
+    if os.getenv('VERCEL') and ollama_url.startswith(('http://127.0.0.1', 'http://localhost')):
         failures.append('Ollama is not reachable from this deployment')
     else:
         try:
